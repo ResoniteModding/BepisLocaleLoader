@@ -11,7 +11,7 @@ namespace BepisLocaleLoader;
 [BepInDependency(BepInExResoniteShim.PluginMetadata.GUID, BepInDependency.DependencyFlags.HardDependency)]
 public class Plugin : BasePlugin
 {
-    internal static new ManualLogSource Log;
+    internal new static ManualLogSource Log;
 
     public override void Load()
     {
