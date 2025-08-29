@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a GitHub release'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+    release:
+        runs-on: ubuntu-latest
+        steps:
+            -   uses: actions/checkout@v3
+                with:
+                    fetch-depth: 0 # Need to fetch all for proper history
+            -   name: Collect build info
+                id: info
+                run: |
+                    # Get short SHA
+                    SHA_SHORT=$(git rev-parse --short HEAD)
+                    echo "sha_short=$SHA_SHORT" >> $GITHUB_OUTPUT
+                    
+                    # Extract version from csproj
+                    VERSION=$(grep -oP '(?<=<Version>)[^<]+' BepisLocaleLoader.csproj)
+                    echo "version=$VERSION" >> $GITHUB_OUTPUT
+                    echo "Version found: $VERSION"
+            -   uses: actions/setup-dotnet@v4
+                with:
+                    dotnet-version: "9.0.x"
+            -   name: Build
+                run: |
+                    dotnet build -c Release
+                    dotnet pack -c Release --no-build -o ./bin/dist
+                    # Copy the built DLL to dist folder for release
+                    cp ./bin/Release/BepisLocaleLoader.dll ./bin/dist/
+            -   name: Create Git Tag (if needed)
+                if: ${{ github.event_name == 'workflow_dispatch' }}
+                run: |
+                    TAG_NAME="${{ steps.info.outputs.version }}"
+                    # Check if tag already exists
+                    if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+                        echo "Tag $TAG_NAME already exists"
+                    else
+                        echo "Creating tag $TAG_NAME"
+                        git config user.name github-actions
+                        git config user.email github-actions@github.com
+                        git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
+                        git push origin "$TAG_NAME"
+                    fi
+            -   name: Publish to Nuget
+                run: |
+                    dotnet nuget push ./bin/dist/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://nuget-modding.resonite.net/v3/index.json --skip-duplicate
+            -   name: Create GitHub Release
+                if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true') }}
+                uses: softprops/action-gh-release@v2
+                with:
+                    draft: true
+                    prerelease: false
+                    generate_release_notes: false
+                    name: ${{ steps.info.outputs.version }}
+                    tag_name: ${{ steps.info.outputs.version }}
+                    target_commitish: ${{ github.sha }}
+                    files: |
+                        ./bin/dist/*.nupkg
+                        ./bin/dist/*.dll
+                env:
+                    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
