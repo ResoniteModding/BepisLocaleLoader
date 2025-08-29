@@ -21,14 +21,27 @@ public static class LocaleLoader
 
     public static readonly HashSet<PluginInfo> PluginsWithLocales = new HashSet<PluginInfo>();
 
-    public static void AddLocaleString(string rawString, string localeString, bool force = false)
+    public static void AddLocaleString(string rawString, string localeString, bool force = false, string authors = null)
     {
-        bool hasAuthors = string.IsNullOrWhiteSpace(PluginMetadata.AUTHORS);
+        List<string> finalAuthors;
+
+        if (!string.IsNullOrWhiteSpace(authors))
+        {
+            finalAuthors = authors.Split(", ", StringSplitOptions.RemoveEmptyEntries).ToList();
+        }
+        else if (!string.IsNullOrWhiteSpace(PluginMetadata.AUTHORS))
+        {
+            finalAuthors = PluginMetadata.AUTHORS.Split(", ", StringSplitOptions.RemoveEmptyEntries).ToList();
+        }
+        else
+        {
+            finalAuthors = new List<string> { "BepInEx" };
+        }
 
         LocaleData localeData = new LocaleData
         {
             LocaleCode = "en-US",
-            Authors = hasAuthors ? new List<string> { "BepInEx" } : PluginMetadata.AUTHORS.Split(", ", StringSplitOptions.RemoveEmptyEntries).ToList(),
+            Authors = finalAuthors,
             Messages = new Dictionary<string, string>
             {
                 { rawString, localeString }
