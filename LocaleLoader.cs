@@ -1,6 +1,7 @@
 ﻿using System.Text.Json;
 using BepInEx;
 using Elements.Assets;
+using Elements.Core;
 using FrooxEngine;
 
 namespace BepisLocaleLoader;
@@ -140,7 +141,7 @@ public static class LocaleLoader
 
     private static void ProcessPath(string path, Action<string> fileAction)
     {
-        if (!Directory.Exists(path))
+        if (!Path.Exists(path))
         {
             throw new DirectoryNotFoundException("Directory not found: " + path);
         }
@@ -162,4 +163,11 @@ public static class LocaleLoader
             ProcessDirectory(subdir, fileAction);
         }
     }
+
+    public static LocaleString T(this string str, string argName, object argField) => str.AsLocaleKey(null, (argName, argField));
+    public static LocaleString T(this string str, string format, string argName, object argField) => str.AsLocaleKey(format, (argName, argField));
+    public static LocaleString T(this string str, params (string, object)[] arguments) => str.AsLocaleKey(null, arguments);
+    public static LocaleString T(this string str, string format, params (string, object)[] arguments) => str.AsLocaleKey(format, arguments);
+    public static LocaleString T(this string str, bool continuous, Dictionary<string, object> arguments = null) => new LocaleString(str, null, true, continuous, arguments);
+    public static LocaleString T(this string str, string format = null, bool continuous = true, Dictionary<string, object> arguments = null) => new LocaleString(str, format, true, continuous, arguments);
 }
