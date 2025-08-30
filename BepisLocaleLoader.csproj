@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <Version>1.0.0</Version>
-        <Authors>NepuShiro</Authors>
+        <Authors>ResoniteModding</Authors>
         <TargetFramework>net9.0</TargetFramework>
         <PackageProjectUrl>https://github.com/ResoniteModding/BepisLocaleLoader</PackageProjectUrl>
         <RepositoryUrl>https://github.com/ResoniteModding/BepisLocaleLoader</RepositoryUrl>
