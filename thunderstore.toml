@@ -26,9 +26,9 @@ source = "./bin/Release/BepisLocaleLoader.dll"
 target = "plugins/BepisLocaleLoader/"
 
 # Include the PDB file for better debugging support
-[[build.copy]]
-source = "./bin/Release/BepisLocaleLoader.pdb"
-target = "plugins/BepisLocaleLoader/"
+# [[build.copy]]
+# source = "./bin/Release/BepisLocaleLoader.pdb"
+# target = "plugins/BepisLocaleLoader/"
 
 # Uncomment the following lines to include CHANGELOG file in your mod package. https://wiki.thunderstore.io/mods/updating-a-package#changelog
 # [[build.copy]]
