@@ -42,6 +42,10 @@ jobs:
                     dotnet pack -c Release --no-build -o ./bin/dist
                     # Copy the built DLL to dist folder for release
                     cp ./bin/Release/BepisLocaleLoader.dll ./bin/dist/
+            -   name: Create Thunderstore Package
+                run: |
+                    dotnet tool restore
+                    dotnet tcli build
             -   name: Create Git Tag (if needed)
                 if: ${{ github.event_name == 'workflow_dispatch' }}
                 run: |
@@ -72,5 +76,6 @@ jobs:
                     files: |
                         ./bin/dist/*.nupkg
                         ./bin/dist/*.dll
+                        ./build/*.zip
                 env:
                     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

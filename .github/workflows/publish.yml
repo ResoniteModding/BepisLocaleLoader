@@ -1,0 +1,39 @@
+name: Publish to Thunderstore
+
+on:
+  workflow_dispatch:
+
+jobs:
+    release:
+        runs-on: ubuntu-latest
+        steps:
+            -   uses: actions/checkout@v3
+                with:
+                    fetch-depth: 0 # Need to fetch all for proper history
+            -   name: Collect build info
+                id: info
+                run: |
+                    # Get short SHA
+                    SHA_SHORT=$(git rev-parse --short HEAD)
+                    echo "sha_short=$SHA_SHORT" >> $GITHUB_OUTPUT
+                    
+                    # Extract version from csproj
+                    VERSION=$(grep -oP '(?<=<Version>)[^<]+' BepisLocaleLoader.csproj)
+                    echo "version=$VERSION" >> $GITHUB_OUTPUT
+                    echo "Version found: $VERSION"
+            -   uses: actions/setup-dotnet@v4
+                with:
+                    dotnet-version: "9.0.x"
+            -   name: Build
+                run: |
+                    dotnet build -c Release
+            -   name: Create Thunderstore Package
+                run: |
+                    dotnet tool restore
+                    dotnet tcli build --package-version $VERSION
+            -   name: Publish to Thunderstore
+                run: |
+                    ZIP_FILE=$(ls ./build/*.zip | head -1)
+                    dotnet tcli publish --file "$ZIP_FILE"
+                env:
+                    TCLI_AUTH_TOKEN: ${{ secrets.TCLI_AUTH_TOKEN }}
