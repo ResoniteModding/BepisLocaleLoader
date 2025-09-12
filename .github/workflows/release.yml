@@ -45,7 +45,7 @@ jobs:
             -   name: Create Thunderstore Package
                 run: |
                     dotnet tool restore
-                    dotnet tcli build
+                    dotnet tcli build --package-version ${{ steps.info.outputs.version }}
             -   name: Create Git Tag (if needed)
                 if: ${{ github.event_name == 'workflow_dispatch' }}
                 run: |
