@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <Version>1.0.0</Version>
+        <Version>1.0.1</Version>
         <Authors>ResoniteModding</Authors>
         <TargetFramework>net9.0</TargetFramework>
         <PackageProjectUrl>https://github.com/ResoniteModding/BepisLocaleLoader</PackageProjectUrl>
@@ -33,6 +33,7 @@
         <PackageReference Include="BepInEx.NET.CoreCLR" Version="6.0.0-be.*" IncludeAssets="compile"/>
         <PackageReference Include="BepInEx.ResonitePluginInfoProps" Version="3.*"/>
         <PackageReference Include="ResoniteModding.BepInExResoniteShim" Version="0.8.*"/>
+        <PackageReference Include="ResoniteModding.BepisResoniteWrapper" Version="1.*" />
     </ItemGroup>
 
     <!-- NuGet fallback stripped game references -->
