@@ -2,6 +2,7 @@
 using BepInEx.Logging;
 using BepInEx.NET.Common;
 using BepInExResoniteShim;
+using BepisResoniteWrapper;
 using FrooxEngine;
 using HarmonyLib;
 
@@ -18,20 +19,14 @@ public class Plugin : BasePlugin
         // Plugin startup logic
         Log = base.Log;
 
-        // TODO: Switch this to a event subscription when BepInExResoniteShim is updated
-        Task.Run(async () =>
+        ResoniteHooks.OnEngineReady += async () =>
         {
-            while (Engine.Current == null || Userspace.UserspaceWorld == null)
-            {
-                await Task.Delay(10);
-            }
-
             await Task.Delay(5000);
 
             if (NetChainloader.Instance.Plugins.Count <= 0) return;
 
             NetChainloader.Instance.Plugins.Values.Do(LocaleLoader.AddLocaleFromPlugin);
-        });
+        };
 
         Log.LogInfo($"Plugin {PluginMetadata.GUID} is loaded!");
     }

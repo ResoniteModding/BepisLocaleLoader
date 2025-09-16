@@ -81,7 +81,7 @@ public static class LocaleLoader
             return;
         }
 
-        Plugin.Log.LogDebug($"- {localeData.LocaleCode} - c-{localeData.Messages.Count}");
+        Plugin.Log.LogDebug($"- LocaleCode: {localeData.LocaleCode}, Message Count: {localeData.Messages.Count}");
 
         Update(localeData, true);
     }
@@ -163,6 +163,35 @@ public static class LocaleLoader
             ProcessDirectory(subdir, fileAction);
         }
     }
+
+    private static string GetFormattedLocaleString(this string key, string format, Dictionary<string, object> dict, (string, object)[] arguments)
+    {
+        Dictionary<string, object> merged = dict != null ? new Dictionary<string, object>(dict) : new Dictionary<string, object>();
+
+        if (arguments != null)
+        {
+            foreach ((string name, object value) in arguments)
+            {
+                merged[name] = value;
+            }
+        }
+
+        string formatted = _localeProvider?.Asset?.Format(key, merged);
+
+        if (!string.IsNullOrWhiteSpace(format))
+        {
+            formatted = string.Format(format, formatted);
+        }
+
+        return formatted;
+    }
+    
+    public static string GetFormattedLocaleString(this string key) => key.GetFormattedLocaleString(null, null, null);
+    public static string GetFormattedLocaleString(this string key, string format) => key.GetFormattedLocaleString(format, null, null);
+    public static string GetFormattedLocaleString(this string key, string argName, object argField) => key.GetFormattedLocaleString(null, null, new (string, object)[] { (argName, argField) });
+    public static string GetFormattedLocaleString(this string key, string format, string argName, object argField) => key.GetFormattedLocaleString(format, null, new (string, object)[] { (argName, argField) });
+    public static string GetFormattedLocaleString(this string key, params (string, object)[] arguments) => key.GetFormattedLocaleString(null, null, arguments);
+    public static string GetFormattedLocaleString(this string key, string format, params (string, object)[] arguments) => key.GetFormattedLocaleString(format, null, arguments);
 
     public static LocaleString T(this string str, string argName, object argField) => str.AsLocaleKey(null, (argName, argField));
     public static LocaleString T(this string str, string format, string argName, object argField) => str.AsLocaleKey(format, (argName, argField));
