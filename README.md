@@ -8,9 +8,15 @@ A [Resonite](https://resonite.com/) mod that Loads locale files for Plugins.
    - **Default location:** `C:\Program Files (x86)\Steam\steamapps\common\Resonite\BepInEx\`
 4. Start the game. If you want to verify that the mod is working you can check your BepInEx logs.
 
-# Usage
+# Example config using ConfigDescription
 
----
+```cs
+private static ConfigEntry<bool> exampleConfigItem;
+public override void Load()
+{
+  exampleConfigItem = Config.Bind("General", "exampleConfigItem", false, new ConfigDescription("exampleConfigItem Description", null, new ConfigLocale("Settings.dev.author.myPlugin.config.Key", "Settings.dev.author.myPlugin.config.Description")));
+}
+```
 
 ## Adding Locale Strings Manually
 
@@ -42,25 +48,13 @@ Files should follow the `LocaleData` JSON structure:
   "localeCode": "en-US",
   "authors": ["MyName"],
   "messages": {
-    "Settings.MyPlugin.Option": "Enable Feature",
-    "Settings.MyPlugin.Description": "This feature toggles something cool."
+    "Settings.dev.author.myPlugin": "My Plugin",
+    "Settings.dev.author.myPlugin.Breadcrumb": "My Plugin Settings Breadcrumb Title",
+    "Settings.dev.author.myPlugin.config.Key": "Example Config Key",
+    "Settings.dev.author.myPlugin.config.Description": "Example Config Description."
   }
 }
 ```
-
-Load all locale files from a plugin with:
-
-```csharp
-LocaleLoader.AddLocaleFromPlugin(myPluginInfo);
-```
-
-Or load a single JSON file manually:
-
-```csharp
-LocaleLoader.AddLocaleFromFile("path/to/Locale/en.json");
-```
-
----
 
 ## String Shorthand: `.T()`
 

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <Version>1.0.1</Version>
+        <Version>1.1.0</Version>
         <Authors>ResoniteModding</Authors>
         <TargetFramework>net9.0</TargetFramework>
         <PackageProjectUrl>https://github.com/ResoniteModding/BepisLocaleLoader</PackageProjectUrl>
