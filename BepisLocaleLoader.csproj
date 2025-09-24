@@ -38,7 +38,7 @@
 
     <!-- NuGet fallback stripped game references -->
     <ItemGroup Condition="!Exists('$(GamePath)')">
-        <PackageReference Include="Resonite.GameLibs" Version="2025.*"/>
+        <PackageReference Include="Resonite.GameLibs" Version="2025.*" PrivateAssets="all"/>
     </ItemGroup>
 
     <!-- Local game references -->
