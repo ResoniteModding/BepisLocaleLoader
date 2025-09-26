@@ -10,13 +10,32 @@ A [Resonite](https://resonite.com/) mod that Loads locale files for Plugins.
 
 # Example config using ConfigDescription
 
+You can add locale to a config entry by adding a `ConfigLocale` in your `ConfigDescription` like this:
+
 ```cs
 private static ConfigEntry<bool> exampleConfigItem;
 public override void Load()
 {
-  exampleConfigItem = Config.Bind("General", "exampleConfigItem", false, new ConfigDescription("exampleConfigItem Description", null, new ConfigLocale("Settings.dev.author.myPlugin.config.Key", "Settings.dev.author.myPlugin.config.Description")));
+  exampleConfigItem = Config.Bind("General", "exampleConfigItem", false, new ConfigDescription("exampleConfigItem Description", null, new ConfigLocale("Settings.dev.author.myPlugin.General.exampleConfigItem", "Settings.dev.author.myPlugin.General.exampleConfigItem.Description")));
 }
 ```
+
+Or you can use the `ConfigLocaleHelper` class which provides the `BindLocalized` extension method like this:
+
+```cs
+private static ConfigEntry<bool> exampleConfigItem;
+public override void Load()
+{
+  // Generates the following locale keys:
+  // Name: "Settings.dev.author.myPlugin.General.exampleConfigItem"
+  // Description: "Settings.dev.author.myPlugin.General.exampleConfigItem.Description"
+  exampleConfigItem = Config.BindLocalized("dev.author.myPlugin", "General", "exampleConfigItem", false, "exampleConfigItem Description");
+  // NOTE: If you are using the ResoniteModding plugin template you can use `PluginMetadata.GUID` instead of `"dev.author.myPlugin"`
+}
+```
+
+When defining config entries with locale, it's still recommended to provide the entry's english description ("exampleConfigItem Description" in this case), as this will be visible when editing the config file manually or via mod managers.
+
 
 ## Adding Locale Strings Manually
 
