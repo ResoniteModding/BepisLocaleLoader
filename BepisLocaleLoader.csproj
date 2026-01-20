@@ -31,7 +31,7 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.102" PrivateAssets="all" />
         <PackageReference Include="BepInEx.NET.CoreCLR" Version="6.0.0-be.*" IncludeAssets="compile" />
-        <PackageReference Include="BepInEx.ResonitePluginInfoProps" Version="3.*" />
+        <PackageReference Include="BepInEx.AutoPlugin" Version="2.1.0" PrivateAssets="all" />
         <PackageReference Include="ResoniteModding.BepInExResoniteShim" Version="0.9.*" />
         <PackageReference Include="ResoniteModding.BepisResoniteWrapper" Version="1.*" />
     </ItemGroup>

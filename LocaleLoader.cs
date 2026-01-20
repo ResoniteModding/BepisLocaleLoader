@@ -30,9 +30,9 @@ public static class LocaleLoader
         {
             finalAuthors = authors.Split(", ", StringSplitOptions.RemoveEmptyEntries).ToList();
         }
-        else if (!string.IsNullOrWhiteSpace(PluginMetadata.AUTHORS))
+        else if (!string.IsNullOrWhiteSpace(Plugin.AUTHORS))
         {
-            finalAuthors = PluginMetadata.AUTHORS.Split(", ", StringSplitOptions.RemoveEmptyEntries).ToList();
+            finalAuthors = Plugin.AUTHORS.Split(", ", StringSplitOptions.RemoveEmptyEntries).ToList();
         }
         else
         {
