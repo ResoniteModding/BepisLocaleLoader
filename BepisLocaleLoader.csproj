@@ -11,7 +11,7 @@
         <Product>Bepis Locale Loader</Product>
         <RootNamespace>BepisLocaleLoader</RootNamespace>
         <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>disable</Nullable>
+        <Nullable>enable</Nullable>
         <Deterministic>true</Deterministic>
         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
         <CopyToPlugins>true</CopyToPlugins>
