@@ -44,20 +44,11 @@ public static class LocaleLoader
     /// </summary>
     public static void AddLocaleString(string rawString, string localeString, bool force = false, string? authors = null)
     {
-        List<string> finalAuthors;
+        string authorsSource = !string.IsNullOrWhiteSpace(authors) ? authors
+            : !string.IsNullOrWhiteSpace(Plugin.AUTHORS) ? Plugin.AUTHORS
+            : "BepInEx";
 
-        if (!string.IsNullOrWhiteSpace(authors))
-        {
-            finalAuthors = authors.Split(", ", StringSplitOptions.RemoveEmptyEntries).ToList();
-        }
-        else if (!string.IsNullOrWhiteSpace(Plugin.AUTHORS))
-        {
-            finalAuthors = Plugin.AUTHORS.Split(", ", StringSplitOptions.RemoveEmptyEntries).ToList();
-        }
-        else
-        {
-            finalAuthors = ["BepInEx"];
-        }
+        List<string> finalAuthors = authorsSource.Split(", ", StringSplitOptions.RemoveEmptyEntries).ToList();
 
         LocaleData localeData = new()
         {
@@ -191,8 +182,7 @@ public static class LocaleLoader
     {
         var localeProvider = Userspace.UserspaceWorld?.GetCoreLocale();
 
-        Dictionary<string, object> merged = dict != null ? new Dictionary<string, object>(dict) : new Dictionary<string, object>();
-
+        Dictionary<string, object> merged = dict != null ? new Dictionary<string, object>(dict) : [];
         if (arguments != null)
         {
             foreach ((string name, object value) in arguments)

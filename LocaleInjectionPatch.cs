@@ -103,10 +103,9 @@ internal static class LocaleInjectionPatch
         localeData.LoadDataAdditively(data);
 
         string fileLocale = data.LocaleCode ?? "unknown";
-        bool isFallback = !IsLocaleMatch(fileLocale, targetLocale);
-        string fallbackIndicator = isFallback ? " (fallback)" : "";
+        bool isMatch = IsLocaleMatch(fileLocale, targetLocale);
 
-        Plugin.Log.LogDebug($"  - {Path.GetFileName(filePath)}: {fileLocale}, {data.Messages.Count} messages{fallbackIndicator}");
+        Plugin.Log.LogDebug($"  - {Path.GetFileName(filePath)}: {fileLocale}, {data.Messages.Count} messages{(isMatch ? "" : " (fallback)")}");
 
         return data.Messages.Count;
     }
