@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using BepInEx;
 using BepInEx.NET.Common;
 using Elements.Assets;
@@ -13,6 +14,11 @@ namespace BepisLocaleLoader;
 [HarmonyPatch(typeof(FrooxEngine.LocaleResource), "LoadTargetVariant")]
 internal static class LocaleInjectionPatch
 {
+    private static readonly object _injectionLock = new();
+    private static string _lastInjectedLocale = string.Empty;
+    private static DateTime _lastInjectionTime = DateTime.MinValue;
+    private static readonly TimeSpan _deduplicationWindow = TimeSpan.FromMilliseconds(500);
+
     /// <summary>
     /// Postfix that runs after LoadTargetVariant completes.
     /// Waits for the async method to finish, then injects all mod locales.
@@ -39,13 +45,25 @@ internal static class LocaleInjectionPatch
                 return;
             }
 
-            Plugin.Log.LogDebug($"Injecting mod locales after LoadTargetVariant completed (target: {targetLocale})");
+            lock (_injectionLock)
+            {
+                var now = DateTime.UtcNow;
+                if (_lastInjectedLocale == targetLocale && (now - _lastInjectionTime) < _deduplicationWindow)
+                {
+                    Plugin.Log.LogDebug($"Skipping duplicate injection for {targetLocale} (called {(now - _lastInjectionTime).TotalMilliseconds:F0}ms after previous)");
+                    return;
+                }
 
-            InjectAllPluginLocales(__instance.Data, targetLocale);
+                Plugin.Log.LogDebug($"Injecting mod locales after LoadTargetVariant completed (target: {targetLocale})");
+
+                _lastInjectedLocale = targetLocale;
+                _lastInjectionTime = now;
+
+                InjectAllPluginLocales(__instance.Data, targetLocale);
+            }
         }
         catch (Exception ex)
         {
-            // async void cannot propagate exceptions and unhandled ones may crash the app
             Plugin.Log.LogError($"Failed to inject mod locales: {ex}");
         }
     }
@@ -72,14 +90,10 @@ internal static class LocaleInjectionPatch
 
             Plugin.Log.LogDebug($"Loading locales from {plugin.Metadata?.GUID ?? "unknown"}");
 
-            foreach (string file in localeFiles)
-            {
-                int injected = InjectLocaleFile(localeData, file, targetLocale);
-                if (injected > 0)
-                {
-                    messageCount += injected;
-                }
-            }
+            var candidates = LoadLocaleFiles(localeFiles);
+            var toInject = SelectMatchingLocales(candidates, targetLocale, out bool usingFallback);
+
+            messageCount += InjectAndLogLocales(localeData, toInject, usingFallback);
 
             LocaleLoader.TrackPluginWithLocale(plugin);
             pluginCount++;
@@ -92,22 +106,65 @@ internal static class LocaleInjectionPatch
     }
 
     /// <summary>
-    /// Loads and injects a single locale file into the target locale resource.
+    /// Loads locale data from the specified list of locale files.
     /// </summary>
-    /// <returns>Number of messages injected, or 0 on failure</returns>
-    private static int InjectLocaleFile(Elements.Assets.LocaleResource localeData, string filePath, string targetLocale)
+    private static List<(string Path, LocaleData Data)> LoadLocaleFiles(List<string> localeFiles)
     {
-        var data = LocaleLoader.LoadLocaleDataFromFile(filePath);
-        if (data == null) return 0;
+        var candidates = new List<(string Path, LocaleData Data)>();
 
-        localeData.LoadDataAdditively(data);
+        foreach (string file in localeFiles)
+        {
+            var data = LocaleLoader.LoadLocaleDataFromFile(file);
+            if (data != null)
+            {
+                candidates.Add((file, data));
+            }
+        }
 
-        string fileLocale = data.LocaleCode ?? "unknown";
-        bool isMatch = IsLocaleMatch(fileLocale, targetLocale);
+        return candidates;
+    }
 
-        Plugin.Log.LogDebug($"  - {Path.GetFileName(filePath)}: {fileLocale}, {data.Messages.Count} messages{(isMatch ? "" : " (fallback)")}");
+    /// <summary>
+    /// Selects locale data that matches the target locale, with fallback to English if no matches are found.
+    /// </summary>
+    private static List<(string Path, LocaleData Data)> SelectMatchingLocales(
+        List<(string Path, LocaleData Data)> candidates,
+        string targetLocale,
+        out bool usingFallback)
+    {
+        var matches = candidates.Where(c => IsLocaleMatch(c.Data.LocaleCode, targetLocale)).ToList();
 
-        return data.Messages.Count;
+        usingFallback = false;
+        if (matches.Count == 0 && !IsLocaleMatch(targetLocale, "en"))
+        {
+            matches = candidates.Where(c => IsLocaleMatch(c.Data.LocaleCode, "en")).ToList();
+            usingFallback = true;
+        }
+
+        return matches;
+    }
+
+    /// <summary>
+    /// Injects the selected locale data into the locale resource and logs the results.
+    /// </summary>
+    private static int InjectAndLogLocales(
+        Elements.Assets.LocaleResource localeData,
+        List<(string Path, LocaleData Data)> toInject,
+        bool usingFallback)
+    {
+        int messageCount = 0;
+
+        foreach (var (file, data) in toInject)
+        {
+            localeData.LoadDataAdditively(data);
+            messageCount += data.Messages.Count;
+
+            string fileLocale = data.LocaleCode ?? "unknown";
+            string fallbackSuffix = usingFallback ? " (fallback)" : string.Empty;
+            Plugin.Log.LogDebug($"  - {Path.GetFileName(file)}: {fileLocale}, {data.Messages.Count} messages{fallbackSuffix}");
+        }
+
+        return messageCount;
     }
 
     /// <summary>
@@ -125,7 +182,6 @@ internal static class LocaleInjectionPatch
         if (fileLocale == targetLocale)
             return true;
 
-        // Base language match (e.g., "en-us" matches "en")
         string fileBase = Elements.Assets.LocaleResource.GetMainLanguage(fileLocale);
         string targetBase = Elements.Assets.LocaleResource.GetMainLanguage(targetLocale);
 
