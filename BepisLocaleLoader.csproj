@@ -3,7 +3,7 @@
     <PropertyGroup>
         <Version>1.2.0</Version>
         <Authors>ResoniteModding</Authors>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <PackageProjectUrl>https://github.com/ResoniteModding/BepisLocaleLoader</PackageProjectUrl>
         <RepositoryUrl>https://github.com/ResoniteModding/BepisLocaleLoader</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
@@ -11,7 +11,7 @@
         <Product>Bepis Locale Loader</Product>
         <RootNamespace>BepisLocaleLoader</RootNamespace>
         <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>disable</Nullable>
+        <Nullable>enable</Nullable>
         <Deterministic>true</Deterministic>
         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
         <CopyToPlugins>true</CopyToPlugins>
@@ -29,16 +29,16 @@
 
     <!-- Modding dependencies -->
     <ItemGroup>
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
-        <PackageReference Include="BepInEx.NET.CoreCLR" Version="6.0.0-be.*" IncludeAssets="compile"/>
-        <PackageReference Include="BepInEx.ResonitePluginInfoProps" Version="3.*"/>
-        <PackageReference Include="ResoniteModding.BepInExResoniteShim" Version="0.8.*"/>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.102" PrivateAssets="all" />
+        <PackageReference Include="BepInEx.NET.CoreCLR" Version="6.0.0-be.*" IncludeAssets="compile" />
+        <PackageReference Include="BepInEx.AutoPlugin" Version="2.1.0" PrivateAssets="all" />
+        <PackageReference Include="ResoniteModding.BepInExResoniteShim" Version="0.9.*" />
         <PackageReference Include="ResoniteModding.BepisResoniteWrapper" Version="1.*" />
     </ItemGroup>
 
     <!-- NuGet fallback stripped game references -->
     <ItemGroup Condition="!Exists('$(GamePath)')">
-        <PackageReference Include="Resonite.GameLibs" Version="2025.*" PrivateAssets="all"/>
+        <PackageReference Include="Resonite.GameLibs" Version="2025.*" PrivateAssets="all" />
     </ItemGroup>
 
     <!-- Local game references -->
@@ -68,12 +68,12 @@
     <!-- Post-build copy to game plugins folder -->
     <Target Name="PostBuild" AfterTargets="PostBuildEvent">
         <ItemGroup>
-            <PluginFiles Include="$(TargetPath)"/>
-            <PluginFiles Include="$(TargetDir)$(TargetName).pdb" Condition="Exists('$(TargetDir)$(TargetName).pdb')"/>
+            <PluginFiles Include="$(TargetPath)" />
+            <PluginFiles Include="$(TargetDir)$(TargetName).pdb" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
         </ItemGroup>
 
-        <Copy SourceFiles="@(PluginFiles)" DestinationFolder="$(PluginTargetDir)" Condition="'$(CopyToPlugins)' == 'true'"/>
-        <Message Text="Copied plugin files to $(PluginTargetDir)" Importance="high" Condition="'$(CopyToPlugins)' == 'true'"/>
+        <Copy SourceFiles="@(PluginFiles)" DestinationFolder="$(PluginTargetDir)" Condition="'$(CopyToPlugins)' == 'true'" />
+        <Message Text="Copied plugin files to $(PluginTargetDir)" Importance="high" Condition="'$(CopyToPlugins)' == 'true'" />
     </Target>
 
     <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">

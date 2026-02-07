@@ -3,7 +3,6 @@ using Elements.Core;
 
 namespace BepisLocaleLoader;
 
-// We could maybe add more things to this later if needed
 public struct ConfigLocale
 {
     public ConfigLocale(string name, string description)
@@ -49,7 +48,7 @@ public static class ConfigLocaleHelper
     /// <param name="key">Name of the setting.</param>
     /// <param name="defaultValue">Value of the setting if the setting was not created yet.</param>
     /// <param name="configDescription">Description and other metadata of the setting. The text description will be visible when editing config files via mod managers or manually.</param>
-    public static ConfigEntry<T> BindLocalized<T>(this ConfigFile config, string guid, string section, string key, T defaultValue, ConfigDescription configDescription = null)
+    public static ConfigEntry<T> BindLocalized<T>(this ConfigFile config, string guid, string section, string key, T defaultValue, ConfigDescription? configDescription = null)
     {
         return config.BindLocalized(guid, new ConfigDefinition(section, key), defaultValue, configDescription);
     }
@@ -63,19 +62,16 @@ public static class ConfigLocaleHelper
     /// <param name="configDefinition">Section and Key of the setting.</param>
     /// <param name="defaultValue">Value of the setting if the setting was not created yet.</param>
     /// <param name="configDescription">Description and other metadata of the setting. The text description will be visible when editing config files via mod managers or manually.</param>
-    public static ConfigEntry<T> BindLocalized<T>(this ConfigFile config, string guid, ConfigDefinition configDefinition, T defaultValue, ConfigDescription configDescription = null)
+    public static ConfigEntry<T> BindLocalized<T>(this ConfigFile config, string guid, ConfigDefinition configDefinition, T defaultValue, ConfigDescription? configDescription = null)
     {
-        var localeName = $"Settings.{guid}.{configDefinition.Section}.{configDefinition.Key}";
-        var localeDescription = localeName + ".Description";
+        string localeName = $"Settings.{guid}.{configDefinition.Section}.{configDefinition.Key}";
+        string localeDescription = $"{localeName}.Description";
         var locale = new ConfigLocale(localeName, localeDescription);
-        if(configDescription == null)
-        {
-            configDescription = new ConfigDescription(string.Empty, null, locale);
-        }
-        else
-        {
-            configDescription = new ConfigDescription(configDescription.Description, configDescription.AcceptableValues, [..configDescription.Tags, locale]);
-        }
-        return config.Bind(configDefinition, defaultValue, configDescription);
+
+        string description = configDescription?.Description ?? string.Empty;
+        var acceptableValues = configDescription?.AcceptableValues;
+        object[] tags = configDescription != null ? [.. configDescription.Tags, locale] : [locale];
+
+        return config.Bind(configDefinition, defaultValue, new ConfigDescription(description, acceptableValues, tags));
     }
 }

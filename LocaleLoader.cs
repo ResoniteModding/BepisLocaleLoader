@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using BepInEx;
 using Elements.Assets;
 using Elements.Core;
@@ -6,40 +6,51 @@ using FrooxEngine;
 
 namespace BepisLocaleLoader;
 
-// Edited Locale Code is from - https://github.com/Xlinka/Project-Obsidian/blob/main/ProjectObsidian/Settings/LocaleHelper.cs
+/// <summary>
+/// Public API for locale loading.
+/// Primary locale injection happens via Harmony patch in LocaleInjectionPatch.
+/// This class provides runtime APIs for adding locales after initial load.
+/// </summary>
 public static class LocaleLoader
 {
-    private static StaticLocaleProvider _localeProvider;
-    private static string _lastOverrideLocale;
-    private const string OverrideLocaleString = "somethingRandomJustToMakeItChange";
-
-    private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true
     };
 
-    public static readonly HashSet<PluginInfo> PluginsWithLocales = new HashSet<PluginInfo>();
+    private static readonly object _pluginsLock = new();
 
-    public static void AddLocaleString(string rawString, string localeString, bool force = false, string authors = null)
+    /// <summary>
+    /// Tracks which plugins have locale files.
+    /// </summary>
+    public static readonly HashSet<PluginInfo> PluginsWithLocales = new();
+
+    /// <summary>
+    /// Thread-safe method to add a plugin to the tracking set.
+    /// </summary>
+    internal static void TrackPluginWithLocale(PluginInfo plugin)
     {
-        List<string> finalAuthors;
+        lock (_pluginsLock)
+        {
+            PluginsWithLocales.Add(plugin);
+        }
+    }
 
-        if (!string.IsNullOrWhiteSpace(authors))
-        {
-            finalAuthors = authors.Split(", ", StringSplitOptions.RemoveEmptyEntries).ToList();
-        }
-        else if (!string.IsNullOrWhiteSpace(PluginMetadata.AUTHORS))
-        {
-            finalAuthors = PluginMetadata.AUTHORS.Split(", ", StringSplitOptions.RemoveEmptyEntries).ToList();
-        }
-        else
-        {
-            finalAuthors = new List<string> { "BepInEx" };
-        }
+    /// <summary>
+    /// Add a single locale string at runtime.
+    /// For bulk loading, use the Locale/ folder in your plugin directory.
+    /// </summary>
+    public static void AddLocaleString(string rawString, string localeString, bool force = false, string? authors = null)
+    {
+        string authorsSource = !string.IsNullOrWhiteSpace(authors) ? authors
+            : !string.IsNullOrWhiteSpace(Plugin.AUTHORS) ? Plugin.AUTHORS
+            : "BepInEx";
 
-        LocaleData localeData = new LocaleData
+        List<string> finalAuthors = authorsSource.Split(", ", StringSplitOptions.RemoveEmptyEntries).ToList();
+
+        LocaleData localeData = new()
         {
             LocaleCode = "en-US",
             Authors = finalAuthors,
@@ -49,125 +60,129 @@ public static class LocaleLoader
             }
         };
 
-        Update(localeData, force);
+        InjectLocaleData(localeData, force);
     }
 
+    /// <summary>
+    /// Add locales from a plugin's Locale/ folder at runtime.
+    /// Note: This is automatically handled by the Harmony patch during locale loading.
+    /// </summary>
     public static void AddLocaleFromPlugin(PluginInfo plugin)
     {
-        string dir = Path.GetDirectoryName(plugin.Location);
-        string locale = Path.Combine(dir, "Locale");
+        var localeFiles = GetPluginLocaleFiles(plugin).ToList();
+        if (localeFiles.Count == 0) return;
 
-        if (!Path.Exists(locale)) return;
+        Plugin.Log.LogDebug($"Adding locale for {plugin.Metadata?.GUID ?? "unknown"}");
 
-        Plugin.Log.LogDebug($"Adding locale for {plugin.Metadata.GUID}");
-        ProcessPath(locale, AddLocaleFromFile);
+        foreach (string file in localeFiles)
+        {
+            AddLocaleFromFile(file);
+        }
 
-        PluginsWithLocales.Add(plugin);
+        TrackPluginWithLocale(plugin);
     }
 
+    /// <summary>
+    /// Gets all locale JSON files from a plugin's Locale/ folder.
+    /// </summary>
+    internal static IEnumerable<string> GetPluginLocaleFiles(PluginInfo plugin)
+    {
+        string? pluginDir = Path.GetDirectoryName(plugin.Location);
+        if (string.IsNullOrEmpty(pluginDir))
+            return [];
+
+        string localeDir = Path.Combine(pluginDir, "Locale");
+
+        if (!Directory.Exists(localeDir))
+            return [];
+
+        return Directory.GetFiles(localeDir, "*.json", SearchOption.AllDirectories);
+    }
+
+    /// <summary>
+    /// Add locale from a specific file at runtime.
+    /// </summary>
     public static void AddLocaleFromFile(string path)
     {
-        if (!File.Exists(path)) return;
+        var localeData = LoadLocaleDataFromFile(path);
+        if (localeData == null) return;
 
-        string json = File.ReadAllText(path);
-        LocaleData localeData;
+        Plugin.Log.LogDebug($"- LocaleCode: {localeData.LocaleCode}, Message Count: {localeData.Messages.Count}");
+
+        InjectLocaleData(localeData, force: true);
+    }
+
+    /// <summary>
+    /// Loads and parses a locale JSON file, returning the LocaleData or null on failure.
+    /// </summary>
+    internal static LocaleData? LoadLocaleDataFromFile(string path)
+    {
+        if (!File.Exists(path)) return null;
+
+        string json;
+        try
+        {
+            json = File.ReadAllText(path);
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.LogError($"Error reading locale file {path}: {e}");
+            return null;
+        }
+
+        LocaleData? localeData;
         try
         {
             localeData = JsonSerializer.Deserialize<LocaleData>(json, JsonOptions);
         }
         catch (Exception e)
         {
-            Plugin.Log.LogError(e);
+            Plugin.Log.LogError($"Error parsing locale file {path}: {e}");
+            return null;
+        }
+
+        if (localeData?.Messages == null)
+        {
+            Plugin.Log.LogError($"Invalid locale file (missing messages): {path}");
+            return null;
+        }
+
+        return localeData;
+    }
+
+    /// <summary>
+    /// Inject locale data into the current locale provider.
+    /// </summary>
+    private static void InjectLocaleData(LocaleData localeData, bool force)
+    {
+        var localeProvider = Userspace.UserspaceWorld?.GetCoreLocale();
+
+        if (localeProvider?.Asset?.Data == null)
+        {
+            Plugin.Log.LogWarning("Cannot inject locale data - locale provider not available yet");
             return;
         }
 
-        Plugin.Log.LogDebug($"- LocaleCode: {localeData.LocaleCode}, Message Count: {localeData.Messages.Count}");
-
-        Update(localeData, true);
-    }
-
-    private static void Update(LocaleData localeData, bool force)
-    {
-        UpdateDelayed(localeData, force);
-        Settings.RegisterValueChanges<LocaleSettings>(_ => UpdateDelayed(localeData, force));
-    }
-
-    private static void UpdateDelayed(LocaleData localeData, bool force)
-    {
-        Userspace.UserspaceWorld?.RunInUpdates(15, () => UpdateIntern(localeData, force));
-    }
-
-    private static void UpdateIntern(LocaleData localeData, bool force)
-    {
-        _localeProvider = Userspace.UserspaceWorld?.GetCoreLocale();
-        if (_localeProvider?.Asset?.Data is null)
+        if (!force)
         {
-            Userspace.UserspaceWorld?.RunSynchronously(() => UpdateIntern(localeData, force));
-        }
-        else
-        {
-            UpdateLocale(localeData, force);
-        }
-    }
-
-    private static void UpdateLocale(LocaleData localeData, bool force)
-    {
-        if (_localeProvider?.Asset?.Data != null)
-        {
-            if (!force)
+            string? firstKey = localeData.Messages.Keys.FirstOrDefault();
+            if (firstKey != null)
             {
-                string firstKey = localeData.Messages.Keys.FirstOrDefault();
-
-                bool alreadyExists = _localeProvider.Asset.Data.Messages.Any(ld => ld.Key == firstKey);
+                bool alreadyExists = localeProvider.Asset.Data.Messages.Any(ld => ld.Key == firstKey);
                 if (alreadyExists) return;
             }
-
-            _localeProvider.Asset.Data.LoadDataAdditively(localeData);
-
-            // force asset update for locale provider
-            if (_localeProvider.OverrideLocale.Value != null && _localeProvider.OverrideLocale.Value != OverrideLocaleString)
-            {
-                _lastOverrideLocale = _localeProvider.OverrideLocale.Value;
-            }
-
-            _localeProvider.OverrideLocale.Value = OverrideLocaleString;
-            Userspace.UserspaceWorld.RunInUpdates(1, () => { _localeProvider.OverrideLocale.Value = _lastOverrideLocale; });
         }
-        else if (_localeProvider?.Asset?.Data == null)
-        {
-            Plugin.Log.LogError("Locale data is null when it shouldn't be!");
-        }
+
+        localeProvider.Asset.Data.LoadDataAdditively(localeData);
     }
 
-    private static void ProcessPath(string path, Action<string> fileAction)
+    #region String Formatting Extensions
+
+    private static string GetFormattedLocaleString(this string key, string? format, Dictionary<string, object>? dict, (string, object)[]? arguments)
     {
-        if (!Path.Exists(path))
-        {
-            throw new DirectoryNotFoundException("Directory not found: " + path);
-        }
+        var localeProvider = Userspace.UserspaceWorld?.GetCoreLocale();
 
-        ProcessDirectory(path, fileAction);
-    }
-
-    private static void ProcessDirectory(string directory, Action<string> fileAction)
-    {
-        string[] files = Directory.GetFiles(directory);
-        foreach (string file in files)
-        {
-            fileAction(file);
-        }
-
-        string[] subdirectories = Directory.GetDirectories(directory);
-        foreach (string subdir in subdirectories)
-        {
-            ProcessDirectory(subdir, fileAction);
-        }
-    }
-
-    private static string GetFormattedLocaleString(this string key, string format, Dictionary<string, object> dict, (string, object)[] arguments)
-    {
-        Dictionary<string, object> merged = dict != null ? new Dictionary<string, object>(dict) : new Dictionary<string, object>();
-
+        Dictionary<string, object> merged = dict != null ? new Dictionary<string, object>(dict) : [];
         if (arguments != null)
         {
             foreach ((string name, object value) in arguments)
@@ -176,27 +191,33 @@ public static class LocaleLoader
             }
         }
 
-        string formatted = _localeProvider?.Asset?.Format(key, merged);
+        string? formatted = localeProvider?.Asset?.Format(key, merged);
 
         if (!string.IsNullOrWhiteSpace(format))
         {
             formatted = string.Format(format, formatted);
         }
 
-        return formatted;
+        return formatted ?? key;
     }
-    
+
     public static string GetFormattedLocaleString(this string key) => key.GetFormattedLocaleString(null, null, null);
     public static string GetFormattedLocaleString(this string key, string format) => key.GetFormattedLocaleString(format, null, null);
-    public static string GetFormattedLocaleString(this string key, string argName, object argField) => key.GetFormattedLocaleString(null, null, new (string, object)[] { (argName, argField) });
-    public static string GetFormattedLocaleString(this string key, string format, string argName, object argField) => key.GetFormattedLocaleString(format, null, new (string, object)[] { (argName, argField) });
+    public static string GetFormattedLocaleString(this string key, string argName, object argField) => key.GetFormattedLocaleString(null, null, [(argName, argField)]);
+    public static string GetFormattedLocaleString(this string key, string format, string argName, object argField) => key.GetFormattedLocaleString(format, null, [(argName, argField)]);
     public static string GetFormattedLocaleString(this string key, params (string, object)[] arguments) => key.GetFormattedLocaleString(null, null, arguments);
     public static string GetFormattedLocaleString(this string key, string format, params (string, object)[] arguments) => key.GetFormattedLocaleString(format, null, arguments);
+
+    #endregion
+
+    #region LocaleString Extensions
 
     public static LocaleString T(this string str, string argName, object argField) => str.AsLocaleKey(null, (argName, argField));
     public static LocaleString T(this string str, string format, string argName, object argField) => str.AsLocaleKey(format, (argName, argField));
     public static LocaleString T(this string str, params (string, object)[] arguments) => str.AsLocaleKey(null, arguments);
     public static LocaleString T(this string str, string format, params (string, object)[] arguments) => str.AsLocaleKey(format, arguments);
-    public static LocaleString T(this string str, bool continuous, Dictionary<string, object> arguments = null) => new LocaleString(str, null, true, continuous, arguments);
-    public static LocaleString T(this string str, string format = null, bool continuous = true, Dictionary<string, object> arguments = null) => new LocaleString(str, format, true, continuous, arguments);
+    public static LocaleString T(this string str, bool continuous, Dictionary<string, object>? arguments = null) => new(str, null, true, continuous, arguments);
+    public static LocaleString T(this string str, string? format = null, bool continuous = true, Dictionary<string, object>? arguments = null) => new(str, format, true, continuous, arguments);
+
+    #endregion
 }
