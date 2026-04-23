@@ -29,7 +29,7 @@
 
     <!-- Modding dependencies -->
     <ItemGroup>
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.102" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.203" PrivateAssets="all" />
         <PackageReference Include="BepInEx.NET.CoreCLR" Version="6.0.0-be.*" IncludeAssets="compile" />
         <PackageReference Include="BepInEx.AutoPlugin" Version="2.1.0" PrivateAssets="all" />
         <PackageReference Include="ResoniteModding.BepInExResoniteShim" Version="0.9.*" />
@@ -38,7 +38,7 @@
 
     <!-- NuGet fallback stripped game references -->
     <ItemGroup Condition="!Exists('$(GamePath)')">
-        <PackageReference Include="Resonite.GameLibs" Version="2025.*" PrivateAssets="all" />
+        <PackageReference Include="Resonite.GameLibs" Version="*" PrivateAssets="all" />
     </ItemGroup>
 
     <!-- Local game references -->
