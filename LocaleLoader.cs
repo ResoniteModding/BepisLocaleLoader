@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading;
 using BepInEx;
 using Elements.Assets;
 using Elements.Core;
@@ -21,6 +22,8 @@ public static class LocaleLoader
     };
 
     private static readonly object _pluginsLock = new();
+    private static readonly RuntimeLocaleMutationCoordinator<LocaleData> _runtimeMutations = new();
+    private static int _runtimeFlushScheduled;
 
     /// <summary>
     /// Tracks which plugins have locale files.
@@ -60,7 +63,7 @@ public static class LocaleLoader
             }
         };
 
-        InjectLocaleData(localeData, force);
+        QueueRuntimeLocaleData(localeData, force);
     }
 
     /// <summary>
@@ -109,7 +112,7 @@ public static class LocaleLoader
 
         Plugin.Log.LogDebug($"- LocaleCode: {localeData.LocaleCode}, Message Count: {localeData.Messages.Count}");
 
-        InjectLocaleData(localeData, force: true);
+        QueueRuntimeLocaleData(localeData, force: true);
     }
 
     /// <summary>
@@ -151,29 +154,74 @@ public static class LocaleLoader
     }
 
     /// <summary>
-    /// Inject locale data into the current locale provider.
+    /// Applies parsed locale data to a live locale resource, preserving the existing non-force duplicate-skip behavior.
     /// </summary>
-    private static void InjectLocaleData(LocaleData localeData, bool force)
+    internal static bool TryApplyLocaleData(Elements.Assets.LocaleResource localeData, LocaleData newData, bool force)
     {
-        var localeProvider = Userspace.UserspaceWorld?.GetCoreLocale();
+        if (LocaleMutationRules.ShouldSkipMessages(localeData.Messages.Select(entry => entry.Key), newData.Messages.Keys, force))
+            return true;
 
-        if (localeProvider?.Asset?.Data == null)
-        {
-            Plugin.Log.LogWarning("Cannot inject locale data - locale provider not available yet");
+        localeData.LoadDataAdditively(newData);
+        return true;
+    }
+
+    private static void QueueRuntimeLocaleData(LocaleData localeData, bool force)
+    {
+        _runtimeMutations.Enqueue(localeData, force);
+        ScheduleRuntimeLocaleFlush();
+    }
+
+    private static void ScheduleRuntimeLocaleFlush()
+    {
+        var world = Userspace.UserspaceWorld;
+        if (world == null)
             return;
-        }
 
-        if (!force)
+        if (Interlocked.Exchange(ref _runtimeFlushScheduled, 1) == 1)
+            return;
+
+        world.RunSynchronously(() =>
         {
-            string? firstKey = localeData.Messages.Keys.FirstOrDefault();
-            if (firstKey != null)
-            {
-                bool alreadyExists = localeProvider.Asset.Data.Messages.Any(ld => ld.Key == firstKey);
-                if (alreadyExists) return;
-            }
-        }
+            bool providerReady = false;
+            bool hasPendingAfterFlush;
 
-        localeProvider.Asset.Data.LoadDataAdditively(localeData);
+            try
+            {
+                providerReady = TryFlushQueuedLocaleData();
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _runtimeFlushScheduled, 0);
+                hasPendingAfterFlush = _runtimeMutations.PendingCount > 0;
+            }
+
+            if (!hasPendingAfterFlush)
+                return;
+
+            if (providerReady)
+            {
+                ScheduleRuntimeLocaleFlush();
+                return;
+            }
+
+            Userspace.UserspaceWorld?.RunInUpdates(1, ScheduleRuntimeLocaleFlush);
+        });
+    }
+
+    internal static int ReplayRuntimeLocaleData(Elements.Assets.LocaleResource localeData)
+        => _runtimeMutations.ReplayRegistered((data, force) => TryApplyLocaleData(localeData, data, force));
+
+    internal static int FlushPendingLocaleData(Elements.Assets.LocaleResource localeData)
+        => _runtimeMutations.FlushPending((data, force) => TryApplyLocaleData(localeData, data, force));
+
+    internal static bool TryFlushQueuedLocaleData()
+    {
+        var localeAsset = Userspace.UserspaceWorld?.GetCoreLocale()?.Asset;
+        if (localeAsset == null || !LocaleRuntimeFlushGate.CanFlushRuntimeQueue(localeAsset))
+            return false;
+
+        _ = FlushPendingLocaleData(localeAsset.Data);
+        return true;
     }
 
     #region String Formatting Extensions
