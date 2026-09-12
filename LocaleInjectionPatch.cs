@@ -24,7 +24,7 @@ internal static class LocaleInjectionPatch
     /// Waits for the async method to finish, then injects all mod locales.
     /// </summary>
     [HarmonyPostfix]
-    private static async void Postfix(FrooxEngine.LocaleResource __instance, Task __result, LocaleVariantDescriptor? variant)
+    private static async Task Postfix(Task __result, FrooxEngine.LocaleResource __instance, LocaleVariantDescriptor? variant)
     {
         try
         {
