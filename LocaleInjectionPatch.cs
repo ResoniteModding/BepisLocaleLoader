@@ -1,4 +1,6 @@
-using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Text.Json;
 using BepInEx;
 using BepInEx.NET.Common;
 using Elements.Assets;
@@ -7,71 +9,85 @@ using HarmonyLib;
 
 namespace BepisLocaleLoader;
 
-/// <summary>
-/// Harmony patch that injects mod locales immediately after Resonite loads base locale files.
-/// This eliminates race conditions by hooking directly into the locale loading flow.
-/// </summary>
 [HarmonyPatch(typeof(FrooxEngine.LocaleResource), "LoadTargetVariant")]
 internal static class LocaleInjectionPatch
 {
-    private static readonly object _injectionLock = new();
-    private static string _lastInjectedLocale = string.Empty;
-    private static DateTime _lastInjectionTime = DateTime.MinValue;
-    private static readonly TimeSpan _deduplicationWindow = TimeSpan.FromMilliseconds(500);
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
+    };
 
-    /// <summary>
-    /// Postfix that runs after LoadTargetVariant completes.
-    /// Waits for the async method to finish, then injects all mod locales.
-    /// </summary>
+    private static readonly MethodInfo OnLoadStateChangedMethod =
+        AccessTools.Method(typeof(FrooxEngine.Asset), "OnLoadStateChanged")
+        ?? throw new MissingMethodException(typeof(FrooxEngine.Asset).FullName, "OnLoadStateChanged");
+
+    [HarmonyPrefix]
+    private static void Prefix(FrooxEngine.LocaleResource __instance, out bool __state)
+        => __state = __instance.Data != null;
+
+    [HarmonyTranspiler]
+    [HarmonyPatch(MethodType.Async)]
+    private static IEnumerable<CodeInstruction> LoadTargetVariantMoveNextTranspiler(IEnumerable<CodeInstruction> instructions)
+    {
+        foreach (var instruction in instructions)
+        {
+            if (!instruction.Calls(OnLoadStateChangedMethod))
+            {
+                yield return instruction;
+                continue;
+            }
+
+            var pop = new CodeInstruction(OpCodes.Pop);
+            pop.labels.AddRange(instruction.labels);
+            pop.blocks.AddRange(instruction.blocks);
+            yield return pop;
+        }
+    }
+
     [HarmonyPostfix]
-    private static async void Postfix(FrooxEngine.LocaleResource __instance, Task __result, LocaleVariantDescriptor? variant)
+    private static async Task Postfix(Task __result, FrooxEngine.LocaleResource __instance, LocaleVariantDescriptor variant, bool __state)
     {
         try
         {
-            await __result.ConfigureAwait(false);
+            await __result;
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.LogError($"LoadTargetVariant failed before locale injection: {ex}");
+            return;
+        }
 
-            if (__instance.Data == null)
-            {
-                Plugin.Log.LogWarning("LoadTargetVariant completed but Data is null - skipping locale injection");
-                return;
-            }
+        if (__instance.Data == null)
+        {
+            Plugin.Log.LogWarning("LoadTargetVariant completed but Data is null - skipping locale injection");
+            return;
+        }
 
-            string targetLocale = variant?.LocaleCode ?? "en";
-
-            // Skip injection for temporary refresh triggers (RML uses "-" to force locale reload)
-            if (targetLocale == "-")
-            {
-                Plugin.Log.LogDebug("Skipping locale injection for refresh trigger (target: -)");
-                return;
-            }
-
-            lock (_injectionLock)
-            {
-                var now = DateTime.UtcNow;
-                if (_lastInjectedLocale == targetLocale && (now - _lastInjectionTime) < _deduplicationWindow)
-                {
-                    Plugin.Log.LogDebug($"Skipping duplicate injection for {targetLocale} (called {(now - _lastInjectionTime).TotalMilliseconds:F0}ms after previous)");
-                    return;
-                }
-
-                Plugin.Log.LogDebug($"Injecting mod locales after LoadTargetVariant completed (target: {targetLocale})");
-
-                _lastInjectedLocale = targetLocale;
-                _lastInjectionTime = now;
-
-                InjectAllPluginLocales(__instance.Data, targetLocale);
-            }
+        try
+        {
+            InjectAllPluginLocales(__instance.Data);
         }
         catch (Exception ex)
         {
             Plugin.Log.LogError($"Failed to inject mod locales: {ex}");
         }
+
+        if (__state)
+        {
+            try
+            {
+                OnLoadStateChangedMethod.Invoke(__instance, null);
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogError($"Failed to notify locale observers: {ex}");
+            }
+        }
     }
 
-    /// <summary>
-    /// Discovers and injects locale files from all BepInEx plugins.
-    /// </summary>
-    private static void InjectAllPluginLocales(Elements.Assets.LocaleResource localeData, string targetLocale)
+    private static void InjectAllPluginLocales(Elements.Assets.LocaleResource localeData)
     {
         if (NetChainloader.Instance?.Plugins == null || NetChainloader.Instance.Plugins.Count == 0)
         {
@@ -84,107 +100,65 @@ internal static class LocaleInjectionPatch
 
         foreach (var plugin in NetChainloader.Instance.Plugins.Values)
         {
-            var localeFiles = LocaleLoader.GetPluginLocaleFiles(plugin).ToList();
-            if (localeFiles.Count == 0)
+            string? pluginDir = Path.GetDirectoryName(plugin.Location);
+            if (string.IsNullOrEmpty(pluginDir))
+                continue;
+
+            string localeDir = Path.Combine(pluginDir, "Locale");
+            if (!Directory.Exists(localeDir))
                 continue;
 
             Plugin.Log.LogDebug($"Loading locales from {plugin.Metadata?.GUID ?? "unknown"}");
 
-            var candidates = LoadLocaleFiles(localeFiles);
-            var toInject = SelectMatchingLocales(candidates, targetLocale, out bool usingFallback);
+            foreach (string file in Directory.GetFiles(localeDir, "*.json", SearchOption.AllDirectories))
+            {
+                LocaleData? data = LoadLocaleDataFromFile(file);
+                if (data == null)
+                    continue;
 
-            messageCount += InjectAndLogLocales(localeData, toInject, usingFallback);
+                localeData.LoadDataAdditively(data);
+                messageCount += data.Messages.Count;
+                Plugin.Log.LogDebug($"  - {Path.GetFileName(file)}: {data.LocaleCode}, {data.Messages.Count} messages");
+            }
 
-            LocaleLoader.TrackPluginWithLocale(plugin);
+            LocaleLoader.PluginsWithLocales.Add(plugin);
             pluginCount++;
         }
 
         if (pluginCount > 0)
-        {
             Plugin.Log.LogInfo($"Injected {messageCount} locale messages from {pluginCount} plugins");
-        }
     }
 
-    /// <summary>
-    /// Loads locale data from the specified list of locale files.
-    /// </summary>
-    private static List<(string Path, LocaleData Data)> LoadLocaleFiles(List<string> localeFiles)
+    private static LocaleData? LoadLocaleDataFromFile(string path)
     {
-        var candidates = new List<(string Path, LocaleData Data)>();
-
-        foreach (string file in localeFiles)
+        string json;
+        try
         {
-            var data = LocaleLoader.LoadLocaleDataFromFile(file);
-            if (data != null)
-            {
-                candidates.Add((file, data));
-            }
+            json = File.ReadAllText(path);
         }
-
-        return candidates;
-    }
-
-    /// <summary>
-    /// Selects locale data that matches the target locale, with fallback to English if no matches are found.
-    /// </summary>
-    private static List<(string Path, LocaleData Data)> SelectMatchingLocales(
-        List<(string Path, LocaleData Data)> candidates,
-        string targetLocale,
-        out bool usingFallback)
-    {
-        var matches = candidates.Where(c => IsLocaleMatch(c.Data.LocaleCode, targetLocale)).ToList();
-
-        usingFallback = false;
-        if (matches.Count == 0 && !IsLocaleMatch(targetLocale, "en"))
+        catch (Exception ex)
         {
-            matches = candidates.Where(c => IsLocaleMatch(c.Data.LocaleCode, "en")).ToList();
-            usingFallback = true;
+            Plugin.Log.LogError($"Error reading locale file {path}: {ex}");
+            return null;
         }
 
-        return matches;
-    }
-
-    /// <summary>
-    /// Injects the selected locale data into the locale resource and logs the results.
-    /// </summary>
-    private static int InjectAndLogLocales(
-        Elements.Assets.LocaleResource localeData,
-        List<(string Path, LocaleData Data)> toInject,
-        bool usingFallback)
-    {
-        int messageCount = 0;
-
-        foreach (var (file, data) in toInject)
+        LocaleData? localeData;
+        try
         {
-            localeData.LoadDataAdditively(data);
-            messageCount += data.Messages.Count;
-
-            string fileLocale = data.LocaleCode ?? "unknown";
-            string fallbackSuffix = usingFallback ? " (fallback)" : string.Empty;
-            Plugin.Log.LogDebug($"  - {Path.GetFileName(file)}: {fileLocale}, {data.Messages.Count} messages{fallbackSuffix}");
+            localeData = JsonSerializer.Deserialize<LocaleData>(json, JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.LogError($"Error parsing locale file {path}: {ex}");
+            return null;
         }
 
-        return messageCount;
-    }
+        if (localeData?.Messages == null)
+        {
+            Plugin.Log.LogError($"Invalid locale file (missing messages): {path}");
+            return null;
+        }
 
-    /// <summary>
-    /// Checks if the file's locale matches the target locale.
-    /// Handles cases like "en-US" matching "en", or exact matches.
-    /// </summary>
-    private static bool IsLocaleMatch(string fileLocale, string targetLocale)
-    {
-        if (string.IsNullOrEmpty(fileLocale) || string.IsNullOrEmpty(targetLocale))
-            return false;
-
-        fileLocale = fileLocale.ToLowerInvariant();
-        targetLocale = targetLocale.ToLowerInvariant();
-
-        if (fileLocale == targetLocale)
-            return true;
-
-        string fileBase = Elements.Assets.LocaleResource.GetMainLanguage(fileLocale);
-        string targetBase = Elements.Assets.LocaleResource.GetMainLanguage(targetLocale);
-
-        return fileBase == targetBase;
+        return localeData;
     }
 }
