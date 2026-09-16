@@ -13,7 +13,7 @@ containsNsfwContent = false
 
 # List any dependencies your mod has here, in the format "namespace-modname" = "version-constraint"
 [package.dependencies] 
-ResoniteModding-BepisLoader = "1.6.0"
+ResoniteModding-BepisLoader = "1.7.0"
 
 [build]
 icon = "./icon.png"
