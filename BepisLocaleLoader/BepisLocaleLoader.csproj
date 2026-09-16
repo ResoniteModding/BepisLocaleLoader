@@ -1,31 +1,35 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
     <PropertyGroup>
         <Version>1.2.1</Version>
         <Authors>ResoniteModding</Authors>
+        <FirstAuthor>$([System.String]::Copy('$(Authors)').Split(',')[0].Trim())</FirstAuthor>
         <TargetFramework>net10.0</TargetFramework>
-        <PackageProjectUrl>https://github.com/ResoniteModding/BepisLocaleLoader</PackageProjectUrl>
-        <RepositoryUrl>https://github.com/ResoniteModding/BepisLocaleLoader</RepositoryUrl>
-        <RepositoryType>git</RepositoryType>
-        <PackageId>ResoniteModding.BepisLocaleLoader</PackageId>
         <Product>Bepis Locale Loader</Product>
-        <RootNamespace>BepisLocaleLoader</RootNamespace>
+        <Description>Loads locale files for plugins.</Description>
+        <Copyright>Copyright (c) ResoniteModding $([System.DateTime]::UtcNow.Year)</Copyright>
+        <PackageIcon>icon.png</PackageIcon>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageReleaseNotes>See https://github.com/$(FirstAuthor)/$(AssemblyName)/releases</PackageReleaseNotes>
+        <PackageTags>resonite; bepinex; mod; locale; bepis; BepisLoader</PackageTags>
+        <PackageProjectUrl>https://github.com/$(FirstAuthor)</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/$(FirstAuthor)/$(AssemblyName)</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageId>$(FirstAuthor).$(AssemblyName)</PackageId>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RootNamespace>$(AssemblyName)</RootNamespace>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <Deterministic>true</Deterministic>
-        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-        <CopyToPlugins>true</CopyToPlugins>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <DebugType>embedded</DebugType>
-        <GamePath Condition="'$(ResonitePath)' != ''">$(ResonitePath)/</GamePath>
-        <GamePath Condition="Exists('$(MSBuildProgramFiles32)\Steam\steamapps\common\Resonite\')">$(MSBuildProgramFiles32)\Steam\steamapps\common\Resonite\</GamePath>
-        <GamePath Condition="Exists('$(HOME)/.steam/steam/steamapps/common/Resonite/')">$(HOME)/.steam/steam/steamapps/common/Resonite/</GamePath>
-        <PluginTargetDir>$(GamePath)BepInEx\plugins\$(AssemblyName)</PluginTargetDir>
-        <RestoreAdditionalProjectSources>
-            https://nuget-modding.resonite.net/v3/index.json;
-        </RestoreAdditionalProjectSources>
+        <CopyToPlugins>true</CopyToPlugins>
+        <ThunderstorePackable>true</ThunderstorePackable>
     </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="..\icon.png" Pack="true" PackagePath="\" />
+        <None Include="..\README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
 
     <!-- Modding dependencies -->
     <ItemGroup>
@@ -33,7 +37,6 @@
         <PackageReference Include="BepInEx.NET.CoreCLR" Version="6.0.0-be.*" IncludeAssets="compile" />
         <PackageReference Include="BepInEx.AutoPlugin" Version="2.1.0" PrivateAssets="all" />
         <PackageReference Include="ResoniteModding.BepInExResoniteShim" Version="0.9.*" />
-        <PackageReference Include="ResoniteModding.BepisResoniteWrapper" Version="1.*" />
     </ItemGroup>
 
     <!-- NuGet fallback stripped game references -->
@@ -64,19 +67,4 @@
             <Private>False</Private>
         </Reference>
     </ItemGroup>
-
-    <!-- Post-build copy to game plugins folder -->
-    <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-        <ItemGroup>
-            <PluginFiles Include="$(TargetPath)" />
-            <PluginFiles Include="$(TargetDir)$(TargetName).pdb" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
-        </ItemGroup>
-
-        <Copy SourceFiles="@(PluginFiles)" DestinationFolder="$(PluginTargetDir)" Condition="'$(CopyToPlugins)' == 'true'" />
-        <Message Text="Copied plugin files to $(PluginTargetDir)" Importance="high" Condition="'$(CopyToPlugins)' == 'true'" />
-    </Target>
-
-    <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
-        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-    </PropertyGroup>
 </Project>
