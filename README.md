@@ -1,4 +1,14 @@
+<p align="center">
+    <img src="https://raw.githubusercontent.com/ResoniteModding/BepisLocaleLoader/master/icon.png">
+</p>
+
 # BepisLocaleLoader
+[![Thunderstore Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fthunderstore.io%2Fapi%2Fexperimental%2Fpackage%2FResoniteModding%2FBepisLocaleLoader%2F&query=%24.latest.version_number&label=Thunderstore&style=flat&logo=thunderstore&logoColor=white)](https://thunderstore.io/c/resonite/p/ResoniteModding/BepisLocaleLoader/)
+[![Thunderstore Downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fthunderstore.io%2Fapi%2Fv1%2Fpackage-metrics%2FResoniteModding%2FBepisLocaleLoader%2F&query=%24.downloads&label=downloads&style=flat&logo=thunderstore&logoColor=white)](https://thunderstore.io/c/resonite/p/ResoniteModding/BepisLocaleLoader/)
+[![NuGet Version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fnuget-modding.resonite.net%2Fv3%2Fregistration%2Fresonitemodding.bepislocaleloader%2Findex.json&query=%24.items%5B0%5D.upper&label=NuGet&style=flat&logo=nuget&logoColor=white&color=004880)](https://nuget-modding.resonite.net/packages/resonitemodding.bepislocaleloader)
+[![Build](https://img.shields.io/github/actions/workflow/status/ResoniteModding/BepisLocaleLoader/build.yml?style=flat&logo=github)](https://github.com/ResoniteModding/BepisLocaleLoader/actions/workflows/build.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat)](#license)
+
 A [Resonite](https://resonite.com/) mod that Loads locale files for Plugins.
 
 ## Installation (Manual)
@@ -120,4 +130,8 @@ Examples:
 
 - Loaded plugin locales are tracked in `LocaleLoader.PluginsWithLocales`.
 - Logs show which files are loaded and how many messages were registered.
-- Errors during JSON parsing will be logged with details.  
+- Errors during JSON parsing will be logged with details.
+
+## License
+
+This project is licensed under MIT License. See [LICENSE](LICENSE) for details.  
