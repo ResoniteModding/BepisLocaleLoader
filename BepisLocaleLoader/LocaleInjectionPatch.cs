@@ -19,46 +19,38 @@ internal static class LocaleInjectionPatch
         AllowTrailingCommas = true
     };
 
+
     private static readonly MethodInfo OnLoadStateChangedMethod =
         AccessTools.Method(typeof(FrooxEngine.Asset), "OnLoadStateChanged")
         ?? throw new MissingMethodException(typeof(FrooxEngine.Asset).FullName, "OnLoadStateChanged");
+
+    private static readonly MethodInfo GetData =
+        AccessTools.Property(typeof(FrooxEngine.LocaleResource), nameof(FrooxEngine.LocaleResource.Data)).GetMethod
+        ?? throw new MissingMethodException(typeof(FrooxEngine.LocaleResource).FullName, nameof(FrooxEngine.LocaleResource.Data));
 
     [HarmonyPrefix]
     private static void Prefix(FrooxEngine.LocaleResource __instance, out bool __state)
         => __state = __instance.Data != null;
 
     [HarmonyTranspiler]
-    [HarmonyPatch(MethodType.Async)]
     private static IEnumerable<CodeInstruction> LoadTargetVariantMoveNextTranspiler(IEnumerable<CodeInstruction> instructions)
     {
         foreach (var instruction in instructions)
         {
-            if (!instruction.Calls(OnLoadStateChangedMethod))
+            if (instruction.Calls(GetData))
             {
-                yield return instruction;
+                yield return new(OpCodes.Pop);
+                yield return new(OpCodes.Ldnull);
                 continue;
             }
 
-            var pop = new CodeInstruction(OpCodes.Pop);
-            pop.labels.AddRange(instruction.labels);
-            pop.blocks.AddRange(instruction.blocks);
-            yield return pop;
+            yield return instruction;
         }
     }
 
     [HarmonyPostfix]
-    private static async Task Postfix(Task __result, FrooxEngine.LocaleResource __instance, LocaleVariantDescriptor variant, bool __state)
+    private static async Task Postfix(FrooxEngine.LocaleResource __instance, LocaleVariantDescriptor variant, bool __state)
     {
-        try
-        {
-            await __result;
-        }
-        catch (Exception ex)
-        {
-            Plugin.Log.LogError($"LoadTargetVariant failed before locale injection: {ex}");
-            return;
-        }
-
         if (__instance.Data == null)
         {
             Plugin.Log.LogWarning("LoadTargetVariant completed but Data is null - skipping locale injection");
