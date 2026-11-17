@@ -28,8 +28,7 @@ internal static class LocaleInjectionPatch
         => __state = __instance.Data != null;
 
     [HarmonyTranspiler]
-    [HarmonyPatch(MethodType.Async)]
-    private static IEnumerable<CodeInstruction> LoadTargetVariantMoveNextTranspiler(IEnumerable<CodeInstruction> instructions)
+    private static IEnumerable<CodeInstruction> LoadTargetVariantTranspiler(IEnumerable<CodeInstruction> instructions)
     {
         foreach (var instruction in instructions)
         {
@@ -47,18 +46,8 @@ internal static class LocaleInjectionPatch
     }
 
     [HarmonyPostfix]
-    private static async Task Postfix(Task __result, FrooxEngine.LocaleResource __instance, LocaleVariantDescriptor variant, bool __state)
+    private static void Postfix(FrooxEngine.LocaleResource __instance, LocaleVariantDescriptor variant, bool __state)
     {
-        try
-        {
-            await __result;
-        }
-        catch (Exception ex)
-        {
-            Plugin.Log.LogError($"LoadTargetVariant failed before locale injection: {ex}");
-            return;
-        }
-
         if (__instance.Data == null)
         {
             Plugin.Log.LogWarning("LoadTargetVariant completed but Data is null - skipping locale injection");
